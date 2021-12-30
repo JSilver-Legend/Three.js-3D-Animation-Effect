@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Three.js</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<link type="text/css" rel="stylesheet" href="main.css">
+		<style>
+		#info > * {
+			max-width: 650px;
+			margin-left: auto;
+			margin-right: auto;
+		}
+		</style>
+	</head>
+	<body>
+
+		<div id="container"></div>
+
+		<script type="module">
+
+			import * as THREE from './libraries/three.module.js';
+			import Stats from './libraries/stats.module.js';
+			import { OrbitControls } from './libraries/OrbitControls.js';
+			import { GLTFLoader } from './libraries/GLTFLoader.js';
+			import { EffectComposer } from './libraries/EffectComposer.js';
+			import { RenderPass } from './libraries/RenderPass.js';
+			import { UnrealBloomPass } from './libraries/UnrealBloomPass.js';
+
+			let camera, stats;
+			let composer, renderer, mixer1, clock, mixer2;
+			let animationClip;
+			let flag = true;
+
+			const scene = new THREE.Scene();
+			var raycaster = new THREE.Raycaster();
+			
+			var hedraAction;
+			var sphereAction;
+			var hedra;
+
+			mixer1 = new THREE.AnimationMixer();
+			mixer2 = new THREE.AnimationMixer();
+			const params = {
+				exposure: 1,
+				bloomStrength: 1.5,
+				bloomThreshold: 0,
+				bloomRadius: 0
+			};
+
+			document.addEventListener( 'mousedown', onDocumentMouseDown, false );
+
+			init();
+
+
+			function init() {
+
+				const container = document.getElementById( 'container' );
+				container.style.cursor = "pointer";
+
+				stats = new Stats();
+				container.appendChild( stats.dom );
+
+				clock = new THREE.Clock();
+
+				renderer = new THREE.WebGLRenderer( { antialias: true } );
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				renderer.toneMapping = THREE.ReinhardToneMapping;
+				container.appendChild( renderer.domElement );
+
+				camera = new THREE.PerspectiveCamera( 12, window.innerWidth / window.innerHeight, 1, 1000 );
+				camera.position.set( - 5, 2.5, -17.5);
+				scene.add( camera );
+
+				const controls = new OrbitControls( camera, renderer.domElement );
+				controls.enableDamping = true;
+				controls.maxPolarAngle = Math.PI * 0.5;
+				controls.minDistance = 10;
+				controls.maxDistance = 10;
+
+				scene.add( new THREE.AmbientLight(0x7AC8F5 ) );
+
+				const pointLight = new THREE.PointLight( 0x8888ff, 1 );
+				camera.add( pointLight );
+
+				const renderScene = new RenderPass( scene, camera );
+
+				const bloomPass = new UnrealBloomPass( new THREE.Vector2( window.innerWidth, window.innerHeight ), 1.5, 0.4, 0.85 );
+				bloomPass.threshold = params.bloomThreshold;
+				bloomPass.strength = params.bloomStrength;
+				bloomPass.radius = params.bloomRadius;
+
+				composer = new EffectComposer( renderer );
+				composer.addPass( renderScene );
+				composer.addPass( bloomPass );
+
+				new GLTFLoader().load( './model/hedra.glb', function ( gltf ) {
+					hedra = gltf.scene;
+					scene.add( hedra );
+					mixer1 = new THREE.AnimationMixer( hedra );
+					const hedraClip = gltf.animations[ 0 ];
+					hedraAction = mixer1.clipAction( hedraClip.optimize() );
+					hedraAction.paused = true;
+					hedraAction.loop = THREE.LoopOnce;
+					hedraAction.play();
+					animate();
+				} );
+
+				new GLTFLoader().load( './model/sphere.glb', function ( gltf ) {
+					const sphere = gltf.scene;
+					scene.add( sphere );
+					mixer2 = new THREE.AnimationMixer( sphere );
+					const sphereClip = gltf.animations[ 0 ];
+					sphereAction = mixer2.clipAction( sphereClip.optimize() );
+					sphereAction.paused = false;
+					sphereAction.play();
+					animate();
+				} );
+				
+				window.addEventListener( 'resize', onWindowResize );
+			}
+
+			function onWindowResize() {
+				const width = window.innerWidth;
+				const height = window.innerHeight;
+				camera.aspect = width/height;
+				camera.updateProjectionMatrix();
+				renderer.setSize( width, height );
+				composer.setSize( width, height );
+				console.log('x', width, 'y', height);
+			}
+
+			function onDocumentMouseDown( event ) {
+				if(onClickState(event)){
+					if(flag === true) {
+						hedraAction.timeScale = 1;
+						hedraAction.paused = false;
+						hedraAction.clampWhenFinished= true;
+						flag=!flag;
+					}
+					else {
+						hedra.visible = true;
+						hedraAction.timeScale = -1;
+						hedraAction.clampWhenFinished= true;
+						hedraAction.paused = false;
+				 		flag=!flag;
+					}
+				}
+			}
+
+			function animate() {
+				requestAnimationFrame( animate );
+				const delta = clock.getDelta();
+				mixer1.update( delta );
+				mixer2.update( delta );
+				stats.update();
+				composer.render();
+			}
+
+			function onClickState (e, touch = false, hover = false) {
+				var mouse = {};
+				if (touch) {
+					mouse.x = 2 * (e.changedTouches[0].clientX / window.innerWidth) - 1;
+					mouse.y = 1 - 2 * (e.changedTouches[0].clientY / window.innerHeight);
+				} else {
+					mouse.x = 2 * (e.clientX / window.innerWidth) - 1;
+					mouse.y = 1 - 2 * (e.clientY / window.innerHeight);
+				}
+				raycaster.setFromCamera(mouse, camera);
+			  var intersects = raycaster.intersectObjects(scene.children, true);
+				if (intersects[0]) {
+			 		var object = intersects[0].object; 
+					 if(object.name === "GeoSphere001" || object.name === "Hedra004_3" || object.name === "Hedra002_2" || object.name === "Hedra001_2" || object.name === "Hedra005_2" || object.name === "Hedra007" || object.name === "Hedra003_3" || object.name === "Hedra006_2") return true
+				}
+				return false;
+			}
+
+		</script>
+
+	</body>
+
+</html>
